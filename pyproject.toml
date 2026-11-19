@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "maia-ocr"
+version = "0.1.0"
+description = "Scene text, number plates and shipping-container codes for real-time video analytics (PP-OCRv6), served with maia-infer."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Jema" }]
+keywords = ["ocr", "anpr", "license-plate", "iso-6346", "paddleocr", "computer-vision", "video-analytics"]
+dependencies = [
+    "maia-infer @ git+https://github.com/jemaia-elwrose/maia-infer@v0.3.0",
+    "numpy>=1.24",
+    "opencv-python-headless>=4.8",
+    "rapidocr>=3.10,<4",
+    "onnxruntime>=1.17",
+]
+
+[project.optional-dependencies]
+# Install the PaddlePaddle framework for your CUDA first (paddlepaddle-gpu), see README.
+paddle = ["paddleocr>=3.7,<4"]
+dev = ["pytest>=8", "ruff==0.17.5"]
+
+[project.scripts]
+maia-ocr = "maia_ocr.cli:main"
+
+[project.entry-points."maia_infer.workers"]
+ocr = "maia_ocr.workers:OCRWorker"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/maia_ocr"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B904"]

@@ -1,0 +1,31 @@
+# docker compose up --build              # broker + OCR worker (CPU)
+# docker compose up --scale ocr=4        # more workers
+# docker compose run --rm cli plate /data/plate.jpg --format uae
+x-ocr: &ocr
+  build: { context: ., dockerfile: docker/Dockerfile }
+  environment:
+    MAIA_BROKER: tcp://broker:5556
+  restart: unless-stopped
+
+services:
+  broker:
+    <<: *ocr
+    command: ["maia-infer", "broker"]
+    ports: ["5555:5555"]
+    healthcheck:
+      test: ["CMD", "maia-infer", "ping", "--endpoint", "tcp://localhost:5555"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  ocr:
+    <<: *ocr
+    command: ["maia-infer", "worker", "ocr", "--max-batch", "16"]
+    depends_on: [broker]
+
+  cli:
+    <<: *ocr
+    profiles: [tools]
+    restart: "no"
+    entrypoint: ["maia-ocr"]
+    volumes: ["./data:/data"]
