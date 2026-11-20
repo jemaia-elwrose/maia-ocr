@@ -24,9 +24,10 @@ OCR on camera footage is rarely clean: glare, motion blur, small text. A raw mod
 |---|---|
 | `0` / `O`, `8` / `B`, `5` / `S` confusions | Fits the text to a **plate format**: a position that must be a digit can't be `Z`, so it becomes `2`. Picks the reading needing the fewest changes, and refuses if too many are needed. |
 | Different plate layouts | Formats are short templates (`"LL D{1,2} L{0,3} DDDD"`). Presets: `uae`, `india`, `uk`, `eu-de`, `generic`; pass your own for anything else. |
-| Two-row plates | Rows are put in reading order and joined top row first. |
+| UAE plates | `uae.parse` reads the layout, not just the string: the **number** is the tallest digit group, the **code** is the nearest letter(s) or 1-50 category number, and the **emirate** is matched from garbled small print (`SHARIAR`, `DU2HT`, `A.D` all work). Years, `U.A.E`, `COM`, `EXPORT` and Arabic-script noise are ignored. A code letter read as `0` comes back as `?` with candidates `D/O/Q` for the voter to settle. |
+| Two-row and tilted plates | Rows are put in reading order and joined top row first; text more than 2x taller or shorter never shares a row, so a tilted plate's small print doesn't get mixed into the number. |
 | A misread character in some frames | `PlateVoter` combines every reading of a tracked vehicle, position by position, weighted by confidence. |
-| Container codes split over 2-3 lines | Lines are joined in reading order and searched for codes. |
+| Container codes split over 2-3 lines | Lines are joined in reading order and searched for codes that start at a word boundary, so weight markings like `MAX.GR. 67.200 LB 30.480` can't pass the check digit by chance. |
 | "Is this code real?" | ISO 6346 **check digit**: a misread character almost always breaks it, so only verified codes come out. |
 
 ## Backends
@@ -64,10 +65,11 @@ from maia_ocr.client import OCRClient
 
 ocr = OCRClient("tcp://localhost:5555")
 lines = ocr.read(frame)  # TextLine(text, score, poly) in pixels
-reading = ocr.read_plate(plate_crop, "uae")  # PlateReading(text, raw, valid, corrections)
+reading = ocr.read_plate(plate_crop, "uae")  # PlateReading(text, raw, valid, corrections, fields)
+reading.fields  # {'emirate': 'Abu Dhabi', 'code': '14', 'number': '57319', 'key': '1457319', ...}
 
-voter = PlateVoter(min_votes=3)
-plate = voter.update(track_id, reading.text) if reading.valid else voter.decision(track_id)
+voter = PlateVoter(min_votes=3)  # '?' positions are filled by whichever frames read them
+plate = voter.update(track_id, reading.fields["key"]) if reading.valid else voter.decision(track_id)
 ```
 
 ```python
@@ -79,8 +81,14 @@ containers.correct("C5QU 3O5438 3")  # 'CSQU3054383' (check digit verified)
 containers.find(lines)  # every valid code in an OCR result
 ```
 
-`examples/plates_from_video.py` puts it together on a traffic stream: YOLO vehicles, OCR,
-format correction and per-track voting.
+`examples/broker_test.py` checks the service through the broker (text, container codes,
+a UAE plate, batching) and then reads any images you pass. `examples/plates_from_video.py`
+puts it together on a traffic stream: YOLO vehicles, OCR, plate parsing and per-track voting.
+
+```bash
+maia-infer broker &  maia-infer worker ocr &
+python examples/broker_test.py plate.jpg container.jpg --save out/
+```
 
 With Docker (CPU):
 
@@ -98,8 +106,12 @@ recognize-mode crops in a batch are read in one call. The reply is
 
 ## Plate formats are a starting point
 
-Real plate rules have more detail than a template: emirate or state codes, colours,
-special series. The presets catch the common layouts; for production, write the
+The UAE parser is tested on real OCR output from real plates (Dubai, Abu Dhabi, Sharjah,
+Ajman; private, commercial and export; numbers changed in the fixtures). What a parser
+can't fix is text the OCR never returned: a small code printed beside the emirate name is
+sometimes missed altogether, and then the plate comes back with `code=None`. Voting over a
+track, a dedicated plate detector for tighter crops, or the paddle backend help there. The
+template presets for other countries catch common layouts; for production, write the
 templates for the plates your cameras actually see and test them on your footage.
 
 ## Project layout
@@ -108,19 +120,20 @@ templates for the plates your cameras actually see and test them on your footage
 src/maia_ocr/
   backends/      rapid (ONNX Runtime), paddle (PaddlePaddle)
   plates.py      formats, correction, two-row merge, PlateVoter
+  uae.py         UAE plate layout: emirate, code, number
   containers.py  ISO 6346 validation, correction, search
   text.py        rows, reading order, full text
   workers.py     maia-infer worker: ocr
   client.py      OCRClient for pipelines
   cli.py         maia-ocr read | plate | container
-examples/        number plates from a traffic stream
+examples/        broker test, number plates from a traffic stream
 ```
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q          # 22 tests, ~15 s; includes real OCR with the bundled models
+pytest -q          # 46 tests, ~15 s; includes real OCR with the bundled models
 ruff check . && ruff format --check .
 ```
 

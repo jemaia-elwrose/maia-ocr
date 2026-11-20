@@ -5,15 +5,21 @@ from __future__ import annotations
 from .types import TextLine
 
 
-def rows(lines: list[TextLine], overlap: float = 0.5) -> list[list[TextLine]]:
-    """Group lines whose vertical extents overlap (same row), top to bottom, each left to right."""
+def rows(lines: list[TextLine], overlap: float = 0.5, max_height_ratio: float = 2.0) -> list[list[TextLine]]:
+    """Group lines whose vertical extents overlap (same row), top to bottom, each left to right.
+
+    Lines whose heights differ by more than ``max_height_ratio`` are never put on the same row:
+    on a tilted plate the big number's box can span the small text below it.
+    """
     out: list[list[TextLine]] = []
     for ln in sorted(lines, key=lambda line: line.center[1]):
         y1, y2 = ln.box[1], ln.box[3]
         for row in out:
             r1, r2 = min(r.box[1] for r in row), max(r.box[3] for r in row)
             inter = min(y2, r2) - max(y1, r1)
-            if inter > overlap * min(y2 - y1, r2 - r1):
+            heights = [ln.height, *(r.height for r in row)]
+            similar = max(heights) <= max_height_ratio * max(min(heights), 1e-6)
+            if similar and inter > overlap * min(y2 - y1, r2 - r1):
                 row.append(ln)
                 break
         else:

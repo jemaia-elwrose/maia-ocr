@@ -25,7 +25,12 @@ class OCRClient:
 
     def read_plate(self, crop: np.ndarray, formats: str | list[str] = "generic") -> plates.PlateReading:
         """Read a plate crop. One- and two-row plates both work: the crop is read in full
-        and rows are joined top to bottom before the format correction."""
+        and rows are joined top to bottom before the format correction. ``formats="uae"``
+        uses the UAE parser (emirate, code, number; see :mod:`maia_ocr.uae`)."""
         lines = self.read(crop)
+        if formats == "uae":
+            from . import uae
+
+            return uae.parse(lines)
         text = plates.merge_rows(lines) if lines else self.recognize(crop)[0]
         return plates.correct(text, formats)

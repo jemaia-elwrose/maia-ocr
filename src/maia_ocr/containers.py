@@ -35,28 +35,42 @@ def is_valid(code: str) -> bool:
     return bool(_PATTERN.match(code)) and check_digit(code[:10]) == int(code[10])
 
 
-def correct(text: str) -> str | None:
+def correct(text: str, max_corrections: int = 2) -> str | None:
     """Fix letter/digit confusions by position (4 letters, then 7 digits) and return the
-    code if the check digit then agrees; otherwise ``None``."""
+    code if the check digit then agrees; otherwise ``None``. At most ``max_corrections``
+    characters may change, and at most one of them in the 4-letter prefix."""
     clean = normalize(text)
     if len(clean) != 11:
         return None
-    fixed = "".join(TO_LETTER.get(c, c) for c in clean[:4]) + "".join(TO_DIGIT.get(c, c) for c in clean[4:])
+    prefix = "".join(TO_LETTER.get(c, c) for c in clean[:4])
+    serial = "".join(TO_DIGIT.get(c, c) for c in clean[4:])
+    fixed = prefix + serial
+    prefix_changes = sum(a != b for a, b in zip(prefix, clean[:4], strict=True))
+    changes = sum(a != b for a, b in zip(fixed, clean, strict=True))
+    if prefix_changes > 1 or changes > max_corrections:
+        return None
     return fixed if is_valid(fixed) else None
 
 
 def find(lines_or_text) -> list[str]:
-    """Valid container codes in OCR output (codes are often split over 2-3 lines, so lines are joined)."""
+    """Valid container codes in OCR output. Codes are often split over 2-3 lines or
+    words ("CSQU 305438 3"), so words are joined, but a code must *start* at the
+    beginning of a word: sliding over arbitrary character windows of a whole label
+    ("MAX.GR. 67.200 LB ...") finds check-digit-valid nonsense by chance."""
     if isinstance(lines_or_text, str):
         text = lines_or_text
     else:
         from .text import reading_order
 
         text = " ".join(ln.text for ln in reading_order(lines_or_text))
+    words = [normalize(w) for w in re.split(r"[\s.,;:/|()\[\]-]+", text)]
+    words = [w for w in words if w]
     found = []
-    flat = normalize(text)
-    for i in range(len(flat) - 10):
-        code = correct(flat[i : i + 11])
+    for i, w in enumerate(words):
+        if len(w) < 4 or sum(c.isalpha() for c in w[:4]) < 3:
+            continue
+        joined = "".join(words[i : i + 4])
+        code = correct(joined[:11]) if len(joined) >= 11 else None
         if code and code not in found:
             found.append(code)
     return found

@@ -96,8 +96,13 @@ def main(argv: list[str] | None = None) -> None:
         if args.save:
             cv2.imwrite(args.save, _draw(image, lines))
     elif args.cmd == "plate":
-        fmt = args.format if args.format in plates.FORMATS else [args.format]
-        reading = plates.correct(plates.merge_rows(lines), fmt)
+        if args.format == "uae":
+            from . import uae
+
+            reading = uae.parse(lines)
+        else:
+            fmt = args.format if args.format in plates.FORMATS else [args.format]
+            reading = plates.correct(plates.merge_rows(lines), fmt)
         print(json.dumps(reading.__dict__, ensure_ascii=False))
     else:
         print(json.dumps({"containers": containers.find(lines), "text": full_text(lines)}, indent=2))

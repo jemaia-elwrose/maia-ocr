@@ -15,13 +15,14 @@ from __future__ import annotations
 import itertools
 import re
 from collections import Counter, defaultdict, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 #: Common plate formats. Real plate rules have more detail (series, emirate codes, colours);
 #: treat these as starting points and pass your own template for production use.
 FORMATS: dict[str, list[str]] = {
     "generic": ["A{2,10}"],
-    "uae": ["L{0,2} D{1,5}"],  # optional code letter(s) + up to 5 digits, e.g. "AA 12345"
+    # flat-string fallback; for real UAE plates use maia_ocr.uae.parse (emirate, code, number)
+    "uae": ["L{0,2} D{1,5}", "D{1,2} D{1,5}"],
     "india": ["LL D{1,2} L{0,3} DDDD"],  # e.g. MH 12 AB 1234; Bharat series not included
     "uk": ["LL DD LLL"],  # current format, e.g. AB12 CDE
     "eu-de": ["L{1,3} L{1,2} D{1,4}"],  # Germany, e.g. M AB 1234
@@ -84,6 +85,7 @@ class PlateReading:
     raw: str  # what OCR returned
     valid: bool  # matches a template
     corrections: int  # characters changed to fit
+    fields: dict = field(default_factory=dict)  # region parsers: emirate, code, number, key
 
 
 def correct(text: str, formats: str | list[str] = "generic", max_corrections: int = 2) -> PlateReading:
@@ -120,7 +122,7 @@ class PlateVoter:
         self._reads: dict[int, deque] = defaultdict(lambda: deque(maxlen=window))
 
     def update(self, track_id: int, text: str, score: float = 1.0) -> str | None:
-        text = normalize(text)
+        text = re.sub(r"[^A-Z0-9?]", "", text.upper())
         if text:
             self._reads[track_id].append((text, float(score)))
         return self.decision(track_id)
@@ -137,8 +139,9 @@ class PlateVoter:
         for i in range(length):
             votes: Counter = Counter()
             for t, s in same:
-                votes[t[i]] += s
-            chars.append(votes.most_common(1)[0][0])
+                if t[i] != "?":  # '?' = unreadable in that frame: no vote
+                    votes[t[i]] += s
+            chars.append(votes.most_common(1)[0][0] if votes else "?")
         return "".join(chars)
 
     def forget(self, track_id: int) -> None:

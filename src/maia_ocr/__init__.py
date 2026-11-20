@@ -1,6 +1,6 @@
 """maia-ocr: scene text, number plates and container codes for video analytics."""
 
-from . import containers, plates
+from . import containers, plates, uae
 from .plates import PlateReading, PlateVoter
 from .text import full_text, reading_order, rows
 from .types import TextLine, pack_lines, unpack_lines
@@ -15,6 +15,7 @@ __all__ = [
     "plates",
     "reading_order",
     "rows",
+    "uae",
     "unpack_lines",
 ]
-__version__ = "0.1.0"
+__version__ = "0.1.1"

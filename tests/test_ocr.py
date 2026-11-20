@@ -90,6 +90,7 @@ def test_cli(tmp_path, capsys):
     assert json.loads(capsys.readouterr().out)["text"].replace(" ", "") == "EXIT3\nGATEB"
     assert (tmp_path / "out.png").exists()
     main(["plate", paths["plate"], "--format", "uae"])
-    assert json.loads(capsys.readouterr().out)["text"] == "A12345"
+    out = json.loads(capsys.readouterr().out)
+    assert out["text"] == "A 12345" and out["fields"]["key"] == "A12345"
     main(["container", paths["box"]])
     assert json.loads(capsys.readouterr().out)["containers"] == ["CSQU3054383"]

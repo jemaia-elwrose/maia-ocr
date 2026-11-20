@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "maia-ocr"
-version = "0.1.0"
+version = "0.1.1"
 description = "Scene text, number plates and shipping-container codes for real-time video analytics (PP-OCRv6), served with maia-infer."
 readme = "README.md"
 license = "MIT"

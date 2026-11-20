@@ -72,3 +72,19 @@ def test_reading_order_and_rows():
 def test_two_row_plate_merges_top_row_first():
     lines = [_line("1234", 0, 40), _line("DL", 0, 0, w=30), _line("3C", 40, 2, w=30)]
     assert plates.merge_rows(lines) == "DL3C1234"
+
+
+def test_container_search_ignores_check_digit_coincidences():
+    # Real OCR of a container door. Sliding over raw characters used to "find"
+    # RGTZ0018304 inside "MAX.GR. 67.200 LB 30.480" (check digit valid by chance).
+    label = (
+        "CTM 1253 BBCU 217241 8 BULLBOX 22G1 0KG OLB 50 KG www.bufen ULLOX MAX.GR. 67.200 LB 30.480 KG "
+        "40 LB 30 KG TARE 2.150 KG 4.70.8 60 LB 1CU.M. NET 62.460 LB 28.330 KG 70 CU.FT. CU. CAP. 1.170 CUM."
+    )
+    assert containers.find(label) == ["BBCU2172418"]
+
+
+def test_rows_keep_big_and_small_text_apart():
+    big = TextLine("35071", 0.9, np.array([[600, 240], [1940, 100], [2000, 900], [680, 1040]], np.float32))
+    small = TextLine("DUBAI", 0.9, np.array([[680, 740], [1070, 800], [1045, 990], [650, 935]], np.float32))
+    assert [ln.text for ln in reading_order([small, big])] == ["35071", "DUBAI"]  # tilted, overlapping boxes

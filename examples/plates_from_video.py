@@ -55,7 +55,7 @@ def main():
             if crop.size and min(crop.shape[:2]) > 16:
                 reading = ocr.read_plate(crop, fmt)
                 plate = (
-                    voter.update(tid, reading.text, 1.0 if reading.valid else 0.3)
+                    voter.update(tid, reading.fields.get("key", reading.text), 1.0 if reading.valid else 0.3)
                     if reading.valid
                     else voter.decision(tid)
                 )
