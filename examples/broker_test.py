@@ -120,6 +120,7 @@ def main():
     ap.add_argument("--plate-format", default="uae", help=f"uae, {sorted(plates.FORMATS)} or a template")
     ap.add_argument("--save", help="folder for annotated copies")
     ap.add_argument("--skip-synthetic", action="store_true")
+    ap.add_argument("--debug", action="store_true", help="print every OCR box (text, height, centre)")
     args = ap.parse_args()
 
     client = Client(args.endpoint, timeout_ms=20000)  # the first call loads the models
@@ -148,6 +149,10 @@ def main():
         print(f"  text:       {full_text(lines)}")
         print(f"  plate:      {reading.text!r} valid={reading.valid} {reading.fields or ''}")
         print(f"  containers: {containers.find(lines)}")
+        if args.debug:
+            for ln in lines:
+                cx, cy = ln.center
+                print(f"    {ln.text!r:<24} h={ln.height:6.1f} centre=({cx:.0f}, {cy:.0f}) score={ln.score:.2f}")
         if args.save:
             Path(args.save).mkdir(parents=True, exist_ok=True)
             out = Path(args.save) / f"{Path(path).stem}_ocr.jpg"

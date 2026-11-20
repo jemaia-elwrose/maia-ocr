@@ -1,6 +1,8 @@
 # docker compose up --build              # broker + OCR worker (CPU)
 # docker compose up --scale ocr=4        # more workers
-# docker compose run --rm cli plate /data/plate.jpg --format uae
+# docker compose run --rm cli plate /data/plate.jpg --format uae   # ./data is mounted at /data
+# DATA_DIR=~/images docker compose run --rm cli plate /data/plate.jpg --format uae
+# docker compose --profile gpu up --build broker ocr-gpu   # paddle on an NVIDIA GPU
 x-ocr: &ocr
   build: { context: ., dockerfile: docker/Dockerfile }
   environment:
@@ -28,4 +30,19 @@ services:
     profiles: [tools]
     restart: "no"
     entrypoint: ["maia-ocr"]
-    volumes: ["./data:/data"]
+    volumes: ["${DATA_DIR:-./data}:/data:ro"]
+
+  ocr-gpu:
+    <<: *ocr
+    profiles: [gpu]
+    build: { context: ., dockerfile: docker/Dockerfile.paddle-gpu }
+    command: ["maia-infer", "worker", "ocr", "--max-batch", "16", "--opt", "backend=paddle", "--opt", "device=gpu:0"]
+    depends_on: [broker]
+    volumes: ["paddlex-models:/root/.paddlex"]  # models download once
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]
+
+volumes:
+  paddlex-models:

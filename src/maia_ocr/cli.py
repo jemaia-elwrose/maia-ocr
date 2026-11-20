@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -24,7 +25,10 @@ from .types import TextLine
 def _read_image(path: str) -> np.ndarray:
     image = cv2.imread(path)
     if image is None:
-        raise SystemExit(f"cannot read image: {path}")
+        hint = ""
+        if Path("/.dockerenv").exists():
+            hint = " (Docker sees only mounted folders: put images in ./data or set DATA_DIR, then pass /data/<name>)"
+        raise SystemExit(f"cannot read image: {path}{hint}")
     return image
 
 

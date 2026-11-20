@@ -1,0 +1,25 @@
+# GPU image: PaddleOCR (PP-OCRv6 medium, downloaded on first start) on an NVIDIA GPU.
+# The paddlepaddle-gpu wheel brings its own CUDA/cuDNN libraries; the host needs only the
+# NVIDIA driver (>= 545 for CUDA 12.6) and the NVIDIA Container Toolkit.
+#   docker compose --profile gpu up --build broker ocr-gpu
+FROM python:3.12-slim
+ARG PADDLE_VERSION=3.2.0
+ARG CUDA_INDEX=cu126
+# Newer driver (CUDA 13): --build-arg PADDLE_VERSION=3.3.0 --build-arg CUDA_INDEX=cu130
+ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONUNBUFFERED=1 MAIA_BROKER=tcp://broker:5556 \
+    PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
+RUN apt-get update && apt-get install -y --no-install-recommends git libgomp1 libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+RUN pip install "paddlepaddle-gpu==${PADDLE_VERSION}" -i "https://www.paddlepaddle.org.cn/packages/stable/${CUDA_INDEX}/"
+COPY pyproject.toml README.md ./
+COPY src ./src
+# Keep PaddleX's own OpenCV (opencv-contrib-python): its dependency check looks for that
+# package by name, so swapping in the headless build makes the OCR pipeline refuse to start.
+# libgl1/libglib2.0 above are what the non-headless build needs.
+RUN pip install ".[paddle]" \
+ && python -c "import cv2, maia_ocr, importlib.metadata as m; print('ok: maia-ocr', maia_ocr.__version__, \
+'| paddlepaddle-gpu', m.version('paddlepaddle-gpu'), '| opencv', cv2.__version__)"
+# paddle itself can't be imported here: libcuda.so.1 comes from the host driver and is only
+# mounted when the container runs with a GPU. Check it then with:
+#   docker compose --profile gpu run --rm ocr-gpu python -c "import paddle; paddle.utils.run_check()"
+CMD ["maia-infer", "worker", "ocr", "--opt", "backend=paddle", "--opt", "device=gpu:0"]

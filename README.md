@@ -95,6 +95,14 @@ With Docker (CPU):
 ```bash
 docker compose up --build
 docker compose run --rm cli plate /data/plate.jpg --format uae     # ./data is mounted at /data
+DATA_DIR=~/images docker compose run --rm cli plate /data/car.jpg --format uae  # or mount any folder
+```
+
+With Docker on an NVIDIA GPU (paddle backend; needs the NVIDIA Container Toolkit):
+
+```bash
+docker compose --profile gpu up --build broker ocr-gpu
+docker compose --profile gpu run --rm ocr-gpu python -c "import paddle; paddle.utils.run_check()"  # GPU visible?
 ```
 
 ## Wire format

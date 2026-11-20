@@ -27,6 +27,9 @@ import unicodedata
 from .plates import TO_DIGIT, TO_LETTER, PlateReading
 from .types import TextLine
 
+# emirates whose plate codes are letters only; a lone digit beside them is a border or noise
+LETTER_CODES = {"Dubai", "Ajman", "Ras Al Khaimah", "Umm Al Quwain", "Fujairah"}
+
 EMIRATES = {
     "DUBAI": "Dubai",
     "SHARJAH": "Sharjah",
@@ -127,23 +130,39 @@ def parse(lines: list[TextLine]) -> PlateReading:
         best = None
         nx, ny = number_line.center
         for t, ln in tokens:
-            if ln is number_line or ln.height < 0.4 * height:
+            # letter codes can be a third of the number's height (Dubai); numeric codes are bigger
+            if ln is number_line or ln.height < 0.25 * height:
                 continue
             word = re.sub(r"[^A-Za-z0-9]", "", t)
             if word.upper() in SMALL_PRINT or emirate_of(word) or not word:
                 continue
-            if word.isdigit() and any(
-                _same_row(ln, o) and max(ln.height, o.height) <= 1.5 * min(ln.height, o.height)
-                for o in small_rows
-                if o is not ln
+            ambiguous = word.upper() in ("0", "O", "Q") and len(word) == 1  # D misread; may sit beside DUBAI
+            if (
+                word.isdigit()
+                and not ambiguous
+                and any(
+                    _same_row(ln, o) and max(ln.height, o.height) <= 1.5 * min(ln.height, o.height)
+                    for o in small_rows
+                    if o is not ln
+                )
             ):
                 continue  # as small as the small print beside it: part of it, not a code
-            if (word.isalpha() and word.isupper() and len(word) <= 2) or (word.isdigit() and 1 <= int(word) <= 50):
-                cx, cy = ln.center
-                distance = abs(cx - nx) + abs(cy - ny)
-                if best is None or distance < best[0]:
-                    best = (distance, word.upper())
+            letters_only = emirate in LETTER_CODES
+            if ambiguous:
+                value = "?"  # D read as 0/O/Q in its own box: let the voter decide
+            elif word.isalpha() and word.isupper() and len(word) <= 2:
+                value = word.upper()
+            elif word.isdigit() and 1 <= int(word) <= 50 and not letters_only and ln.height >= 0.4 * height:
+                value = word
+            else:
+                continue
+            cx, cy = ln.center
+            distance = abs(cx - nx) + abs(cy - ny)
+            if best is None or distance < best[0]:
+                best = (distance, value)
         code = best[1] if best else None
+        if code == "?":
+            candidates = list(AMBIGUOUS_ZERO)
 
     key = f"{code or ''}{number}"
     valid = 1 <= len(number) <= 5 and number.isdigit()

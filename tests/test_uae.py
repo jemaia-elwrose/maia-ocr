@@ -70,3 +70,62 @@ def test_emirate_names(token, emirate):
 def test_no_number_is_invalid():
     r = uae.parse([TextLine("DUBAI", 0.9, np.array([[0, 0], [50, 0], [50, 10], [0, 10]], np.float32))])
     assert not r.valid and r.fields["emirate"] == "Dubai"
+
+
+def _box(x, y, w, h):
+    return np.array([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], np.float32)
+
+
+def test_letter_emirate_ignores_a_lone_digit():
+    # plate border read as "1" next to the real code "K" (seen on a rendered Dubai plate)
+    r = uae.parse(
+        [
+            TextLine("35071", 0.9, _box(220, 60, 300, 70)),
+            TextLine("DUBAI", 0.9, _box(40, 40, 120, 30)),
+            TextLine("1", 0.9, _box(8, 80, 12, 60)),
+            TextLine("K", 0.9, _box(60, 90, 40, 50)),
+        ]
+    )
+    assert (r.fields["code"], r.fields["number"]) == ("K", "35071")
+
+
+def test_zero_in_its_own_box_is_an_ambiguous_code():
+    # paddle reads the Dubai "D" as a separate "0"
+    r = uae.parse(
+        [
+            TextLine("35071", 0.9, _box(200, 50, 400, 120)),
+            TextLine("0", 0.9, _box(100, 60, 70, 110)),
+            TextLine("DUBAI", 0.9, _box(100, 200, 150, 40)),
+        ]
+    )
+    assert r.fields["code"] == "?" and r.fields["code_candidates"] == ["D", "O", "Q"]
+
+
+def test_zero_beside_the_emirate_name_is_still_the_code():
+    # paddle: "0" box on the same row as "DUBAI" and about its size
+    r = uae.parse(
+        [
+            TextLine("35071", 0.9, _box(300, 40, 500, 160)),
+            TextLine("0", 0.9, _box(60, 90, 70, 95)),
+            TextLine("DUBAI", 0.9, _box(150, 110, 140, 70)),
+        ]
+    )
+    assert r.fields["code"] == "?" and r.fields["number"] == "35071"
+
+
+def _centred(text, cx, cy, w, h):
+    return TextLine(text, 0.9, _box(cx - w / 2, cy - h / 2, w, h))
+
+
+def test_small_zero_code_on_a_tilted_dubai_plate():
+    # paddle on a real tilted photo: code box a third of the number's height (heights and
+    # centres as measured; widths estimated)
+    r = uae.parse(
+        [
+            _centred("35071", 1329, 539, 1150, 808),
+            _centred("0", 728, 572, 170, 268),
+            _centred("DUBAI", 862, 864, 420, 273),
+        ]
+    )
+    assert (r.fields["emirate"], r.fields["code"], r.fields["number"]) == ("Dubai", "?", "35071")
+    assert r.fields["code_candidates"] == ["D", "O", "Q"]
